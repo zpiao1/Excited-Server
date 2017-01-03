@@ -3,7 +3,7 @@ const Schema = mongoose.Schema;
 
 const eventSchema = new Schema({
   url: {type: String, required: true},
-  title: {type: String, required: true}, 
+  title: {type: String, required: true},
   category: {type: String, required: true},
   startDate: Date,
   endDate: Date,

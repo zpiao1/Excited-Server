@@ -3,6 +3,8 @@ const crawler = require('./crawler');
 const http = require('http');
 const logger = require('morgan');
 const bodyParser = require('body-parser');
+const passport = require('passport');
+const authenticate = require('./authenticate');
 
 const app = express();
 const hostname = '0.0.0.0';
@@ -16,6 +18,11 @@ server.listen(port, hostname, () => {
 
 app.use(logger('dev'));
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extended: false}));
 
-const router = require('./routes');
-app.use('/api', router);
+app.use(passport.initialize());
+
+const eventRouter = require('./routes/eventRouter');
+const userRouter = require('./routes/userRouter');
+app.use('/api/events', eventRouter);
+app.use('/api/users', userRouter);
