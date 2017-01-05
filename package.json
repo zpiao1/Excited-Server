@@ -4,8 +4,8 @@
   "description": "Server for the Excited app",
   "main": "index.js",
   "scripts": {
-    "test": "forever start ./server.js -f",
-    "start": "forever start ./server.js -a -o outfile.log -e errfile.log"
+    "test": "npm install && forever start ./server.js -f",
+    "start": "npm install && forever start ./server.js -a -o outfile.log -e errfile.log"
   },
   "author": "Zhao Jingyi",
   "license": "ISC",
@@ -14,6 +14,7 @@
     "body-parser": "^1.15.2",
     "crawler": "^1.0.1",
     "express": "^4.14.0",
+    "google-auth-library": "^0.10.0",
     "jsonwebtoken": "^7.2.1",
     "mongoose": "^4.7.4",
     "morgan": "^1.7.0",

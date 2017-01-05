@@ -1,8 +1,6 @@
 const Crawler = require('crawler');
 const database = require('./database');
 const config = require('./config.json');
-const googleMapsClient = require('@google/maps')
-  .createClient({key: config.googlemapsapikey});
 const request = require('request');
 
 const baseUrl = 'http://thehoneycombers.com/singapore/event-category/';
@@ -24,7 +22,16 @@ urlCrawler.on('drain', () => {
 });
 
 detailCrawler.on('drain', () => {
+  console.log('Detail crawler finished!');
   database.save(events);
+});
+
+detailCrawler.on('error', () => {
+  console.log('Error in detail Crawler');
+});
+
+googleMapsCrawler.on('error', () => {
+  console.log('Error in googleMapsCrawler');
 });
 
 // functions used
@@ -109,11 +116,12 @@ function parseDate(dateStr) {
 }
 
 function getLatLng(location, callback) {
+  // console.log(encodeURIComponent(location));
   googleMapsCrawler.queue({
-    uri: googleMapsUrl + location.replace(/ /g, '+'),
+    uri: googleMapsUrl + encodeURIComponent(location),
     callback: (err, res, done) => {
       if (err)
-        return callback(err);
+        return callback(err, location);
       else {
         const $ = res.$;
         const script = $('head').find('script').text();

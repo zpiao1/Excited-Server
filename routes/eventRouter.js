@@ -17,30 +17,22 @@ const categories = {
 // Get all the event details
 eventRouter.route('/')
   .get((req, res, next) => {
-    if (!req.query.categories) {
-      Events.find({})
-        .select({_id: 1, pictureUrl: 1, title: 1, date: 1})
-        .exec((err, events) => {
-          if (err)
-            return res.status(500)
-              .json(utils.generateErrMsg(req, err));
-          res.json(events);
-        });
-    } else {
-      const queries = req.query.categories.split('|');
-      const cat = queries.map(query => {
-        return categories[query];
+    console.log(`query categories: ${req.query.categories}`);
+    if (req.query.categories === 'none')
+      return res.json([]);
+    const queries = req.query.categories.split('|');
+    const cat = queries.map(query => {
+      return categories[query];
+    });
+    Events.find({category: {$in: cat}})
+      .select({_id: 1, pictureUrl: 1, title: 1, date: 1})
+      .exec((err, events) => {
+        if (err) {
+          return res.status(500)
+            .json(utils.generateErrMsg(req, err));
+        }
+        res.json(events);
       });
-      Events.find({category: {$in: cat}})
-        .select({_id: 1, pictureUrl: 1, title: 1, date: 1})
-        .exec((err, events) => {
-          if (err) {
-            return res.status(500)
-              .json(utils.generateErrMsg(req, err));
-          }
-          res.json(events);
-        });
-    }
   });
 
 eventRouter.route('/count')

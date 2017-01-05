@@ -5,7 +5,7 @@ const passportLocalMongoose = require('passport-local-mongoose');
 const userSchema = new Schema({
   email: String,
   facebookId: String,
-  facebookToken: String
+  googleId: String
 }, {timeStamps: true});
 
 userSchema.plugin(passportLocalMongoose, {

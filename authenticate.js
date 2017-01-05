@@ -1,39 +1,29 @@
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const FacebookTokenStrategy = require('passport-facebook-token');
-const User = require('./models/users');
+const Users = require('./models/users');
 const config = require('./config.json');
+const database = require('./database');
 
-exports.local = passport.use(new LocalStrategy(User.authenticate()));
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+exports.local = passport.use(new LocalStrategy(Users.authenticate()));
+passport.serializeUser(Users.serializeUser());
+passport.deserializeUser(Users.deserializeUser());
 
 exports.facebook = passport.use(new FacebookTokenStrategy({
   clientID: config.facebookAppId,
   clientSecret: config.facebookAppSecret
 }, (accessToken, refreshToken, profile, done) => {
-  User.findOne({facebookId: profile.id}, (err, user) => {
+  console.log('accessToken: ' + accessToken);
+  const user = {
+    email: profile.emails[0].value,
+    facebookId: profile.id
+  };
+  database.saveUser(user, (err, usr) => {
     if (err) {
-      return console.error(err);
-    }
-    console.log('accessToken: ' + accessToken);
-    if (user !== null) {
-      done(null, user);
+      console.error('Error in saving facebook user: ' + JSON.stringify(user));
+      console.error(err);
     } else {
-      // the user does not exist, create one with the provided info
-      user = new User({
-        email: profile.emails[0].value,
-        facebookId: profile.id,
-        facebookToken: accessToken
-      });
-      user.save((err) => {
-        if (err) {
-          console.error(err);
-        } else {
-          console.log(`Facebook user: ${profile.id} saved`);
-          done(null, user);
-        }
-      });
+      done(null, usr);
     }
   });
 }));

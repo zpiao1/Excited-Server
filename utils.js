@@ -5,11 +5,21 @@ exports.generateErrMsg = (req, err) => {
   return {
     method: req.url + ' ' + req.method,
     err: err
-  }
+  };
+};
+
+exports.loginResponse = (user, token) => {
+  return {
+    status: 'Login successfully!',
+    success: true,
+    token: token,
+    id: user._id
+  };
 };
 
 exports.getToken = (user) => {
-  return jwt.sign(user, config.secretKey, {expiresIn: 3600});
+  // expires one year later
+  return jwt.sign(user, config.secretKey, {expiresIn: 3600 * 24 * 365});
 };
 
 exports.verify = (req, res, next) => {
