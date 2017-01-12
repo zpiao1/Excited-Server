@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "npm install && forever start ./server.js -f",
-    "start": "npm install && forever start ./server.js -a -o outfile.log -e errfile.log"
+    "start": "npm install && forever start ./server.js -o ./outfile.log -e ./errfile.log -a"
   },
   "author": "Zhao Jingyi",
   "license": "ISC",
@@ -18,10 +18,14 @@
     "jsonwebtoken": "^7.2.1",
     "mongoose": "^4.7.4",
     "morgan": "^1.7.0",
+    "nodemailer": "^2.7.0",
+    "nodemailer-wellknown": "^0.2.0",
     "passport": "^0.3.2",
     "passport-facebook-token": "^3.3.0",
     "passport-local": "^1.0.0",
     "passport-local-mongoose": "^4.0.0",
-    "request": "^2.79.0"
+    "randomstring": "^1.1.5",
+    "request": "^2.79.0",
+    "xoauth2": "^1.2.0"
   }
 }

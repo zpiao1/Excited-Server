@@ -5,7 +5,7 @@ const Users = require('./models/users');
 const config = require('./config.json');
 const database = require('./database');
 
-exports.local = passport.use(new LocalStrategy(Users.authenticate()));
+exports.local = passport.use(Users.createStrategy());
 passport.serializeUser(Users.serializeUser());
 passport.deserializeUser(Users.deserializeUser());
 
@@ -16,7 +16,9 @@ exports.facebook = passport.use(new FacebookTokenStrategy({
   console.log('accessToken: ' + accessToken);
   const user = {
     email: profile.emails[0].value,
-    facebookId: profile.id
+    facebookId: profile.id,
+    imageUrl: profile.photos[0].value,
+    displayName: profile.displayName
   };
   database.saveUser(user, (err, usr) => {
     if (err) {

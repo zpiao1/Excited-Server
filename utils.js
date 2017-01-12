@@ -1,10 +1,16 @@
 const jwt = require('jsonwebtoken');
 const config = require('./config.json');
+const crypto = require('crypto');
+const cipher = crypto.createCipher('aes192', config.secretKey);
+const decipher = crypto.createDecipher('aes192', config.secretKey);
 
 exports.generateErrMsg = (req, err) => {
   return {
     method: req.url + ' ' + req.method,
-    err: err
+    err: {
+      name: err.name,
+      message: err.message
+    }
   };
 };
 
@@ -45,3 +51,18 @@ exports.verify = (req, res, next) => {
   }
 };
 
+exports.generateVerifyToken = (user) => {
+  let encrypted = cipher.update(user._id + ':' + user.email, 'utf8', 'hex');  // encrypt the user's email and id
+  encrypted += cipher.final('hex');
+  return encrypted;
+};
+
+exports.decryptVerifyToken = (verifyToken) => {
+  let decrypted = decipher.update(verifyToken, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  const splited = decrypted.split(':');
+  return {
+    _id: splited[0],
+    email: splited[1]
+  };
+};

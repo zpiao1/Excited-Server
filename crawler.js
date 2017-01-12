@@ -7,6 +7,10 @@ const baseUrl = 'http://thehoneycombers.com/singapore/event-category/';
 const paths = ['kids', 'arts-and-culture', 'music-and-nightlife', 'sports-and-fitness'];
 const googleMapsUrl = 'https://www.google.com.sg/maps/search/';
 
+const googleMapsClient = require('@google/maps').createClient({
+  key: config.googleMapsApiKey
+});
+
 // array of links to be crawled from
 const links = [];
 // array of event objects to be inserted to the database
@@ -73,34 +77,69 @@ function onDetailCrawled(err, res, done) {
     pictureUrl: $('img.aligncenter').attr('src'),
     googleMapsAlt: $('a[target=_blank]').find('img').attr('alt')
   };
-  if (event.venue) {
-    getLatLng(event.venue, (err, obj) => {
-      if (err) {
+  if (event.venue) {  // if has venue
+    getLatLng(event.venue, (getLatLngVenueError, obj) => {  // get lat lng from venue
+      if (getLatLngVenueError) {  // error in getting lat lng from venue
         // console.error('Error in getting latitude and longitude: ', err);
-        if (event.googleMapsAlt) {
-          getLatLng(event.googleMapsAlt, (err, obj) => {
-            if (err)
-              console.log('location: ' + obj);
-            else {
+        if (event.googleMapsAlt) {  // if has googleMapsAlt
+          getLatLng(event.googleMapsAlt, (getLatLngGoogleMapsAltError, obj) => {  // try to get from googleMapsAlt
+            if (getLatLngGoogleMapsAltError) {
+              console.log('getLatLng Error: location: ' + obj);
+              getLatLngFromApi(event.googleMapsAlt, (getFromApiGoogleMapsAltError, obj) => { // try to get from api using googleMapsAlt
+                if (getFromApiGoogleMapsAltError) {
+                  console.log('getLatLngFromApiError: location: ' + obj);
+                  getLatLngFromApi(event.venue, (getFromApiVenueError, obj) => {
+                    if (getFromApiVenueError) {
+                      console.log('getLatLngFromApiError: location: ' + obj);
+                      events.push(event);
+                      done();
+                    } else {
+                      event.venue = obj.address;
+                      event.lat = obj.lat;
+                      event.lng = obj.lng;
+                      events.push(event);
+                      done();
+                    }
+                  })
+                } else {
+                  event.venue = obj.address;
+                  event.lat = obj.lat;
+                  event.lng = obj.lng;
+                  events.push(event);
+                  done();
+                }
+              });
+            } else {
               event.lat = obj.lat;
               event.lng = obj.lng;
+              events.push(event);
+              done();
             }
-            events.push(event);
-            done();
           });
-        } else {
-          console.log('location: ' + obj);
-          events.push(event);
-          done();
+        } else {  // no googleMapsAlt
+          console.log('NoGoogleMapsAltError: location: ' + obj);
+          getLatLngFromApi(event.venue, (getFromApiVenueError, obj) => {
+            if (getFromApiVenueError) {
+              console.log('getFromApiVenueError: ' + obj);
+              events.push(event);
+              done();
+            } else {
+              event.venue = obj.address;
+              event.lat = obj.lat;
+              event.lng = obj.lng;
+              events.push(event);
+              done();
+            }
+          });
         }
-      } else {
+      } else {  // no error in getting from venue
         event.lat = obj.lat;
         event.lng = obj.lng;
         events.push(event);
         done();
       }
     });
-  } else {
+  } else {  // no venue
     done();
   }
 }
@@ -116,7 +155,7 @@ function parseDate(dateStr) {
 }
 
 function getLatLng(location, callback) {
-  // console.log(encodeURIComponent(location));
+  console.log(googleMapsUrl + encodeURIComponent(location));
   googleMapsCrawler.queue({
     uri: googleMapsUrl + encodeURIComponent(location),
     callback: (err, res, done) => {
@@ -138,6 +177,30 @@ function getLatLng(location, callback) {
         }
       }
       done();
+    }
+  });
+}
+
+function getLatLngFromApi(location, callback) {
+  if (!location.includes('Singapore') || !location.includes('singapore'))
+    location += ' Singapore';
+  googleMapsClient.geocode({
+    address: location
+  }, (err, response) => {
+    if (err) {
+      callback(err, location);
+    } else {
+      if (response.json.status !== 'OK' || response.json.results.length == 0) {
+        callback(new Error('API failed to find location'), location);
+      } else {
+        const result = response.json.results[0];
+        const obj = {
+          address: result.formatted_address,
+          lat: result.geometry.location.lat,
+          lng: result.geometry.location.lng
+        };
+        callback(null, obj);
+      }
     }
   });
 }

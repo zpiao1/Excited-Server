@@ -14,8 +14,8 @@ exports.connect = (callback) => {
   db.once('open', () => {
     console.log('Connected to MongoDB');
     callback();
-    // repeat every hour
-    setInterval(callback, 60 * 60 * 1000);
+    // repeat every day
+    setInterval(callback, 24 * 60 * 60 * 1000);
   });
 };
 
@@ -26,10 +26,13 @@ exports.save = (events) => {
       event,
       {upsert: true},
       (err) => {
-        if (err)
+        if (err) {
           console.error('Updating Error: ', err);
+        }
       });
   });
+  removeOutdatedEvents();
+  setInterval(removeOutdatedEvents, 24 * 60 * 60 * 1000);
 };
 
 exports.saveUser = (user, callback) => {
@@ -52,3 +55,14 @@ exports.saveUser = (user, callback) => {
     );
   }
 };
+
+function removeOutdatedEvents() {
+  Events.remove({endDate: {$lte: Date.now()}})
+    .exec((err, event) => {
+      if (err) {
+        console.error('RemoveOutdatedEventsError', err);
+      } else {
+        console.log('Removed Outdated Events')
+      }
+    });
+}

@@ -6,21 +6,50 @@ const utils = require('../utils');
 const config = require('../config.json');
 const database = require('../database');
 const request = require('request');
+const Mailer = require('../nodemailer');
 
 userRouter.post('/register', (req, res) => {
-  Users.register(new Users({email: req.body.email}),
+  Users.register(new Users({email: req.body.email}),  // register the user
     req.body.password, (err, user) => {
       if (err) {
+        console.error(err);
+        if (err.name === 'UserExistsError') {
+          return res.status(409)
+            .json(utils.generateErrMsg(req, err));
+        }
         return res.status(500)
           .json(utils.generateErrMsg(req, err));
       }
+      user.displayName = req.body.name;
       user.save((err, user) => {
         if (err) {
+          console.error(err);
           return res.status(500)
             .json(utils.generateErrMsg(req, err));
         }
-        passport.authenticate('local')(req, res, () => {
-          return res.status(200).json({status: `${req.body.email} is registered!`});
+        const verifyToken = utils.generateVerifyToken(user);  // generate token for verification
+        user.verifyToken = verifyToken;
+        user.save((err, user) => {  // keep the verifyToken for later use
+          if (err) {
+            console.error(err);
+            return res.status(500)
+              .json(utils.generateErrMsg(req, err));
+          }
+          // send verify email
+          const verifyUrl = config.apiEntrance + 'users/verify?verify_token=' + verifyToken;
+          Mailer.sendEmail(user.email, verifyUrl,
+            (err, info) => {
+              if (err) {
+                console.error(err);
+                return res.status(500)
+                  .json(utils.generateErrMsg(req, err));
+              }
+              // send the verify url to the client
+              res.status(200).json({
+                success: true,
+                url: verifyUrl
+              });
+            });
         });
       });
     });
@@ -39,6 +68,9 @@ userRouter.post('/login', (req, res, next) => {
       if (err) {
         return res.status(500)
           .json(utils.generateErrMsg(req, err));
+      }
+      if (!user.verified) {
+        res.status(403).json(utils.generateErrMsg(req, 'User is not verified!'));
       }
       const token = utils.getToken(user);
       res.status(200).json(utils.loginResponse(user, token));
@@ -70,7 +102,9 @@ userRouter.post('/google', (req, res, next) => {
     body = JSON.parse(body);
     const resUser = { // response user from Google authentications
       email: body.email,
-      googleId: body.sub
+      googleId: body.sub,
+      displayName: body.given_name + ' ' + body.family_name,
+      imageUrl: body.picture
     };
     database.saveUser(resUser, (err, user) => {
       if (err) {
@@ -83,11 +117,60 @@ userRouter.post('/google', (req, res, next) => {
   });
 });
 
+userRouter.get('/verify', (req, res) => {
+  const verifyToken = req.query.verify_token;
+  if (!verifyToken) {
+    return res.status(404).end('<h1>No verification token</h1>');
+  }
+  const user = utils.decryptVerifyToken(verifyToken);
+  Users.findOne({_id: user._id, email: user.email})
+    .exec((err, user) => {
+      if (err) {
+        return res.status(500).end('<h1>Internal Error</h1>');
+      }
+      if (!user) {
+        return res.status(404).end('<h1>User not found</h1>');
+      }
+      user.verified = true;
+      user.verifyToken = null;  // clear the verifyToken
+      user.save((err, user) => {
+        if (err) {
+          return res.status(500).end('<h1>Internal Error</h1>');
+        }
+        return res.status(200).end(`<h1>Congratulations!</h1>
+<p>You account is verified. Welcome to Excited!</p>`);
+      });
+    });
+});
+
+userRouter.route('/:id')
+  .get(utils.verify, (req, res, next) => {
+    Users.findById(req.params.id)
+      .select({_id: 1, displayName: 1, imageUrl: 1, email: 1})
+      .exec((err, user) => {
+        if (err) {
+          console.error(err);
+          res.status(500)
+            .json(utils.generateErrMsg(req, err));
+        } else {
+          if (!user) {
+            res.status(404)
+              .json(utils.generateErrMsg(req, {
+                name: 'UserNotFoundError',
+                message: 'The user does not exists!'
+              }));
+          } else {
+            res.json(user);
+          }
+        }
+      });
+  });
+
 userRouter.route('/:id/likes')
   .get(utils.verify, (req, res, next) => {
     res.json({
       events: ['will', 'send', 'user', req.params.id, 'liked', 'events']
-    })
+    });
   });
 
 function loginUser(req, res, user) {
