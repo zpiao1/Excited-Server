@@ -4,17 +4,29 @@ const passportLocalMongoose = require('passport-local-mongoose');
 
 const userSchema = new Schema({
   email: String,
-  facebookId: String,
-  googleId: String,
-  imageUrl: String,
-  displayName: String,
   verified: {
     type: Boolean,
     default: false
   },
-  verifyToken: {
-    type: String,
-    default: null
+  localProfile: {
+    displayName: String,
+    imageUrl: String,
+    verifyToken: {
+      type: String,
+      default: null
+    }
+  },
+  facebookProfile: {
+    facebookId: String,
+    email: String,
+    imageUrl: String,
+    displayName: String
+  },
+  googleProfile: {
+    googleId: String,
+    imageUrl: String,
+    displayName: String,
+    email: String
   }
 }, {timeStamps: true});
 

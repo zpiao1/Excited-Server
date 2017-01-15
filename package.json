@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "npm install && forever start ./server.js -f",
-    "start": "npm install && forever start ./server.js -o ./outfile.log -e ./errfile.log -a"
+    "start": "npm install && forever start -o ./outfile.log -e ./errfile.log -l ~/excited-server/forever.log --append ./server.js"
   },
   "author": "Zhao Jingyi",
   "license": "ISC",

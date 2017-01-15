@@ -36,24 +36,49 @@ exports.save = (events) => {
 };
 
 exports.saveUser = (user, callback) => {
-  if (!user || !user.email) { // email is not found
-    callback(new Error("User has no email!"));
-  } else {
-    Users.findOneAndUpdate(
-      {email: user.email},
-      user,
-      {upsert: true, new: true}, // create new user if not exists
-      (err, user) => {
-        // console.log('User: ');
-        // console.log(JSON.stringify(user));
-        if (err) {
-          callback(err);
-        } else {
-          callback(null, user);
-        }
-      }
-    );
+  let email = null;
+  if (!user) {
+    return callback(new Error('User is not provided!'));
   }
+  if (user.email)
+    email = user.email;
+  else if (user.facebookProfile && user.facebookProfile.email)
+    email = user.facebookProfile.email;
+  else if (user.googleProfile && user.googleProfile.email)
+    email = user.googleProfile.email;
+  if (!email) {
+    return callback(new Error('Email is not provided!'));
+  }
+  Users.findOne({email: email})
+    .exec((err, userFound) => {
+      if (err) {
+        return callback(err);
+      }
+      if (!userFound) {
+        user.email = (user.facebookProfile ? user.facebookProfile.email : user.googleProfile.email);
+        const newUser = new Users(user);
+        newUser.save((err, user) => {
+          if (err) {
+            return callback(err);
+          } else {
+            return callback(null, user);
+          }
+        });
+      } else {
+        if (user.facebookProfile) {
+          userFound.facebookProfile = JSON.parse(JSON.stringify(user.facebookProfile))
+        } else if (user.googleProfile) {
+          userFound.googleProfile = JSON.parse(JSON.stringify(user.googleProfile));
+        }
+        userFound.save((err, user) => {
+          if (err) {
+            return callback(err);
+          } else {
+            return callback(null, user);
+          }
+        });
+      }
+    });
 };
 
 function removeOutdatedEvents() {

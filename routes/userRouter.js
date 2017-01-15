@@ -9,49 +9,33 @@ const request = require('request');
 const Mailer = require('../nodemailer');
 
 userRouter.post('/register', (req, res) => {
-  Users.register(new Users({email: req.body.email}),  // register the user
-    req.body.password, (err, user) => {
+  Users.findOne({email: req.body.email})
+    .exec((err, user) => {
       if (err) {
         console.error(err);
-        if (err.name === 'UserExistsError') {
-          return res.status(409)
-            .json(utils.generateErrMsg(req, err));
-        }
         return res.status(500)
           .json(utils.generateErrMsg(req, err));
       }
-      user.displayName = req.body.name;
-      user.save((err, user) => {
-        if (err) {
-          console.error(err);
-          return res.status(500)
-            .json(utils.generateErrMsg(req, err));
+      if (user) {
+        const tempUserInfo = {};
+        if (user.facebookProfile) {
+          tempUserInfo.facebookProfile = JSON.parse(JSON.stringify(user.facebookProfile));
         }
-        const verifyToken = utils.generateVerifyToken(user);  // generate token for verification
-        user.verifyToken = verifyToken;
-        user.save((err, user) => {  // keep the verifyToken for later use
-          if (err) {
-            console.error(err);
-            return res.status(500)
-              .json(utils.generateErrMsg(req, err));
-          }
-          // send verify email
-          const verifyUrl = config.apiEntrance + 'users/verify?verify_token=' + verifyToken;
-          Mailer.sendEmail(user.email, verifyUrl,
-            (err, info) => {
-              if (err) {
-                console.error(err);
-                return res.status(500)
-                  .json(utils.generateErrMsg(req, err));
-              }
-              // send the verify url to the client
-              res.status(200).json({
-                success: true,
-                url: verifyUrl
-              });
-            });
-        });
-      });
+        if (user.googleProfile) {
+          tempUserInfo.googleProfile = JSON.parse(JSON.stringify(user.googleProfile));
+        }
+        Users.remove({email: req.body.email})
+          .exec((err, info) => {
+            if (err) {
+              console.error(err);
+              return res.status(500)
+                .json(utils.generateErrMsg(req, err));
+            }
+            registerUser(req, res, tempUserInfo);
+          });
+      } else {
+        registerUser(req, res);
+      }
     });
 });
 
@@ -61,6 +45,8 @@ userRouter.post('/login', (req, res, next) => {
       return next(err);
     }
     if (!user) {
+      const err = new Error('Email/Password error!');
+      err.name = 'UserPasswordError';
       return res.status(401)
         .json(utils.generateErrMsg(req, err));
     }
@@ -80,7 +66,10 @@ userRouter.post('/login', (req, res, next) => {
 
 userRouter.get('/logout', (req, res) => {
   req.logOut();
-  res.status(200).json({status: 'Bye!'});
+  res.status(200).json({
+    status: 'Bye!',
+    success: true
+  });
 });
 
 userRouter.post('/facebook', (req, res, next) => {
@@ -101,10 +90,13 @@ userRouter.post('/google', (req, res, next) => {
     console.log('Response from Google: ' + body);
     body = JSON.parse(body);
     const resUser = { // response user from Google authentications
-      email: body.email,
-      googleId: body.sub,
-      displayName: body.given_name + ' ' + body.family_name,
-      imageUrl: body.picture
+      googleProfile: {
+        email: body.email,
+        googleId: body.sub,
+        displayName: body.given_name + ' ' + body.family_name,
+        imageUrl: body.picture,
+      },
+      verified: true
     };
     database.saveUser(resUser, (err, user) => {
       if (err) {
@@ -132,7 +124,7 @@ userRouter.get('/verify', (req, res) => {
         return res.status(404).end('<h1>User not found</h1>');
       }
       user.verified = true;
-      user.verifyToken = null;  // clear the verifyToken
+      user.localProfile.verifyToken = undefined;  // clear the verifyToken
       user.save((err, user) => {
         if (err) {
           return res.status(500).end('<h1>Internal Error</h1>');
@@ -146,7 +138,14 @@ userRouter.get('/verify', (req, res) => {
 userRouter.route('/:id')
   .get(utils.verify, (req, res, next) => {
     Users.findById(req.params.id)
-      .select({_id: 1, displayName: 1, imageUrl: 1, email: 1})
+      .select({
+        _id: 1,
+        email: 1,
+        verified: 1,
+        localProfile: 1,
+        facebookProfile: 1,
+        googleProfile: 1
+      })
       .exec((err, user) => {
         if (err) {
           console.error(err);
@@ -157,9 +156,13 @@ userRouter.route('/:id')
             res.status(404)
               .json(utils.generateErrMsg(req, {
                 name: 'UserNotFoundError',
-                message: 'The user does not exists!'
+                message: 'The user does not exist!'
               }));
           } else {
+            console.log(JSON.stringify(user.localProfile));
+            if (user.localProfile) {
+              delete user.localProfile.verifyToken;
+            }
             res.json(user);
           }
         }
@@ -186,6 +189,68 @@ function loginUser(req, res, user) {
     const token = utils.getToken(user);
     res.status(200).json(utils.loginResponse(user, token));
   });
+}
+
+function registerUser(req, res, tempUserInfo) {
+  Users.register(new Users({email: req.body.email}),  // register the user
+    req.body.password, (err, user) => {
+      if (err) {
+        console.error(err);
+        if (err.name === 'UserExistsError') {
+          return res.status(409)
+            .json(utils.generateErrMsg(req, err));
+        }
+        return res.status(500)
+          .json(utils.generateErrMsg(req, err));
+      }
+      user.localProfile.displayName = req.body.name;
+      if (tempUserInfo) {
+        if (tempUserInfo.facebookProfile) {
+          user.facebookProfile = JSON.parse(JSON.stringify(tempUserInfo.facebookProfile));
+        }
+        if (tempUserInfo.googleProfile) {
+          user.googleProfile = JSON.parse(JSON.stringify(tempUserInfo.googleProfile));
+        }
+      }
+      user.save((err, user) => {
+        if (err) {
+          console.error(err);
+          return res.status(500)
+            .json(utils.generateErrMsg(req, err));
+        }
+        const verifyToken = utils.generateVerifyToken(user);  // generate token for verification
+        user.localProfile.verifyToken = verifyToken;
+        user.save((err, user) => {  // keep the verifyToken for later use
+          if (err) {
+            console.error(err);
+            return res.status(500)
+              .json(utils.generateErrMsg(req, err));
+          }
+          // send verify email
+          const verifyUrl = config.apiEntrance + 'users/verify?verify_token=' + verifyToken;
+
+          // TODO enable sending email function when push to GitHub
+          Mailer.sendEmail(user.email, verifyUrl,
+            (err, info) => {
+              if (err) {
+                console.error(err);
+                return res.status(500)
+                  .json(utils.generateErrMsg(req, err));
+              }
+              // send the verify url to the client
+              res.status(200).json({
+                success: true,
+                url: verifyUrl
+              });
+            });
+          // send the verify url to the client
+          // res.status(200).json({
+          //   success: true,
+          //   url: verifyUrl
+          // });
+        });
+      });
+    });
 }
 
 module.exports = userRouter;

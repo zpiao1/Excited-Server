@@ -15,10 +15,13 @@ exports.facebook = passport.use(new FacebookTokenStrategy({
 }, (accessToken, refreshToken, profile, done) => {
   console.log('accessToken: ' + accessToken);
   const user = {
-    email: profile.emails[0].value,
-    facebookId: profile.id,
-    imageUrl: profile.photos[0].value,
-    displayName: profile.displayName
+    facebookProfile: {
+      email: profile.emails[0].value,
+      facebookId: profile.id,
+      imageUrl: profile.photos[0].value,
+      displayName: profile.displayName
+    },
+    verified: true
   };
   database.saveUser(user, (err, usr) => {
     if (err) {

@@ -144,10 +144,6 @@ function onDetailCrawled(err, res, done) {
   }
 }
 
-exports.start = () => {
-  database.connect(crawl);
-};
-
 function parseDate(dateStr) {
   if (!dateStr || typeof dateStr != 'string' || dateStr == '')
     return Date.now();
@@ -204,3 +200,12 @@ function getLatLngFromApi(location, callback) {
     }
   });
 }
+
+function noCrawl() {
+}
+
+exports.start = () => {
+  // TODO when push to GitHub set arg to crawl
+  database.connect(crawl);
+};
+
