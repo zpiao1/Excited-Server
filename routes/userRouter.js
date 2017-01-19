@@ -7,6 +7,7 @@ const config = require('../config.json');
 const database = require('../database');
 const request = require('request');
 const Mailer = require('../nodemailer');
+const userErrs = require('passport-local-mongoose').errors;
 
 userRouter.post('/register', (req, res) => {
   Users.findOne({email: req.body.email})
@@ -42,6 +43,7 @@ userRouter.post('/register', (req, res) => {
 userRouter.post('/login', (req, res, next) => {
   passport.authenticate('local', (err, user, info) => {
     if (err) {
+      console.error(err);
       return next(err);
     }
     if (!user) {
@@ -52,6 +54,7 @@ userRouter.post('/login', (req, res, next) => {
     }
     req.logIn(user, (err) => {
       if (err) {
+        console.error(err);
         return res.status(500)
           .json(utils.generateErrMsg(req, err));
       }
@@ -85,28 +88,30 @@ userRouter.post('/facebook', (req, res, next) => {
 });
 
 userRouter.post('/google', (req, res, next) => {
-  const googleTokenInfoUrl = 'https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=';
-  request.get(googleTokenInfoUrl + req.query.id_token, (err, response, body) => {
-    console.log('Response from Google: ' + body);
-    body = JSON.parse(body);
-    const resUser = { // response user from Google authentications
-      googleProfile: {
-        email: body.email,
-        googleId: body.sub,
-        displayName: body.given_name + ' ' + body.family_name,
-        imageUrl: body.picture,
-      },
-      verified: true
-    };
-    database.saveUser(resUser, (err, user) => {
-      if (err) {
-        console.error('Error in saving facebook user: ' + JSON.stringify(resUser));
-        console.error(err);
-      } else {
-        loginUser(req, res, user);
-      }
+  googleAuthenticate(req.query.id_token)
+    .then(user => {
+      const resUser = { // response user from Google authentications
+        googleProfile: {
+          email: user.email,
+          googleId: user.sub,
+          displayName: user.given_name + ' ' + user.family_name,
+          imageUrl: user.picture,
+        },
+        verified: true
+      };
+      database.saveUser(resUser, (err, user) => {
+        if (err) {
+          console.error('Error in saving google user: ' + JSON.stringify(resUser, null, 2));
+          console.error(err);
+        } else {
+          loginUser(req, res, user);
+        }
+      });
+    })
+    .catch(err => {
+      console.error(err);
+      res.status(500).json(utils.generateErrMsg(req, err));
     });
-  });
 });
 
 userRouter.get('/verify', (req, res) => {
@@ -144,7 +149,8 @@ userRouter.route('/:id')
         verified: 1,
         localProfile: 1,
         facebookProfile: 1,
-        googleProfile: 1
+        googleProfile: 1,
+        hasLocalProfile: 1
       })
       .exec((err, user) => {
         if (err) {
@@ -166,6 +172,212 @@ userRouter.route('/:id')
             res.json(user);
           }
         }
+      });
+  });
+
+userRouter.put('/:id/name', utils.verify, (req, res, next) => {
+  Users.findById(req.params.id)
+    .exec((err, user) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json(utils.generateErrMsg(req, err));
+      }
+      if (!user) {
+        err = new Error('User not found!');
+        err.name = 'UserNotFoundError';
+        return res.status(404).json(utils.generateErrMsg(req, err));
+      }
+      if (req.body.displayName) {
+        // Change user's name
+        user.localProfile.displayName = req.body.displayName;
+        user.save((err, user) => {
+          console.log(JSON.stringify(user));
+          if (err) {
+            console.error(err);
+            return res.status(500).json(utils.generateErrMsg(req, err));
+          }
+          return res.status(200).json({
+            _id: user._id,
+            email: user.email,
+            localProfile: user.localProfile,
+            facebookProfile: user.facebookProfile,
+            googleProfile: user.googleProfile,
+            verified: user.verified
+          });
+        });
+      }
+    });
+});
+
+userRouter.put('/:id/password', utils.verify, (req, res, next) => {
+  Users.findById(req.params.id)
+    .exec()
+    .then(user => {
+      if (!user) {
+        const err = new Error('User is not found!');
+        err.name = 'UserNotFoundError';
+        console.error(err);
+        res.status(404).json(utils.generateErrMsg(req, err));
+      } else {
+        return authenticatePassword(user, req.body.originalPassword);
+      }
+    })
+    .then(user => {
+      if (!user) {
+        const err = new Error('User is not found!');
+        err.name = 'UserNotFoundError';
+        console.error(err);
+        res.status(404).json(utils.generateErrMsg(req, err));
+      } else {
+        return setPassword(user, req.body.password);
+      }
+    })
+    .then(user => user.save())
+    .then(() => {
+      res.status(200).json({
+        status: 'Password Changed. Please Log out',
+        success: true
+      })
+    })
+    .catch(err => {
+      console.error(err);
+      res.status(500).json(utils.generateErrMsg(req, err));
+    });
+});
+
+userRouter.route('/:id/facebook')
+  .post(utils.verify, (req, res, next) => {
+    Users.findById(req.params.id)
+      .exec()
+      .then(user => {
+        if (!user) {
+          const err = new Error('User does not exist');
+          err.name = 'UserNotFoundError';
+          return res.status(404)
+            .json(utils.generateErrMsg(req, err));
+        } else {
+          passport.authenticate('facebook-token', (err, user, info) => {
+            if (err) {
+              console.error(err);
+              return res.status(500).json(utils.generateErrMsg(req, err));
+            } else if (!user) {
+              console.error(info);
+              err = new Error('Internal Error');
+              err.name = 'InternalError';
+              return res.status(500).json(utils.generateErrMsg(req, err));
+            } else {
+              res.status(200).json(user);
+            }
+          })(req, res, next);
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        res.status(500).json(utils.generateErrMsg(req, err));
+      });
+  })
+  .delete(utils.verify, (req, res, next) => {
+    Users.findById(req.params.id)
+      .exec()
+      .then(user => {
+        if (!user) {
+          res.status(404).json(utils.generateErrMsg(req, {
+            name: 'UserNotFoundError',
+            message: 'User does not exists!'
+          }));
+        } else {
+          user.facebookProfile = undefined;
+          user.save()
+            .then(user => {
+              res.status(200).json({
+                status: 'Facebook Profile deleted',
+                success: true
+              });
+            })
+            .catch(err => {
+              console.error(err);
+              res.status(500).json(utils.generateErrMsg(req, err));
+            });
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        res.status(500).json(utils.generateErrMsg(req, err));
+      });
+  });
+
+userRouter.route('/:id/google')
+  .all(utils.verify)
+  .post((req, res, next) => {
+    Users.findById(req.params.id)
+      .exec()
+      .then(user => {
+        if (!user) {
+          const err = new Error('User does not exists!');
+          err.name = 'UserNotFoundError';
+          res.status(404).json(utils.generateErrMsg(req, err));
+        } else {
+          googleAuthenticate(req.query.id_token)
+            .then(googleUser => {
+              user.googleProfile = {
+                email: googleUser.email,
+                googleId: googleUser.sub,
+                displayName: googleUser.given_name + ' ' + googleUser.family_name,
+                imageUrl: googleUser.picture,
+              };
+              return user.save();
+            })
+            .then(user => {
+              res.status(200).json({
+                email: user.email,
+                hasLocalProfile: user.hasLocalProfile,
+                googleProfile: user.googleProfile,
+                facebookProfile: user.facebookProfile,
+                localProfile: user.localProfile,
+                verified: user.verified
+              });
+            })
+            .catch(err => {
+              console.error(err);
+              res.status(500).json(utils.generateErrMsg(req, err));
+            });
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        res.status(500).json(utils.generateErrMsg(req, err));
+      })
+  })
+  .delete((req, res, next) => {
+    Users.findById(req.params.id)
+      .exec()
+      .then(user => {
+        if (!user) {
+          const err = new Error('User does not exists!');
+          err.name = 'UserNotFoundError';
+          res.status(404).json(utils.generateErrMsg(req, err));
+        } else {
+          user.googleProfile = undefined;
+          user.save()
+            .then(user => {
+              if (!user) {
+                const err = new Error('User does not exists!');
+                err.name = 'UserNotFoundError';
+                res.status(404).json(utils.generateErrMsg(req, err));
+              } else {
+                res.status(200).json({
+                  success: true,
+                  status: 'Google Profile deleted'
+                });
+              }
+            })
+            .catch(err => {
+              res.status(500).json(utils.generateErrMsg(req, err));
+            });
+        }
+      })
+      .catch(err => {
+        res.status(500).json(utils.generateErrMsg(req, err));
       });
   });
 
@@ -220,6 +432,7 @@ function registerUser(req, res, tempUserInfo) {
         }
         const verifyToken = utils.generateVerifyToken(user);  // generate token for verification
         user.localProfile.verifyToken = verifyToken;
+        user.hasLocalProfile = true;
         user.save((err, user) => {  // keep the verifyToken for later use
           if (err) {
             console.error(err);
@@ -230,27 +443,67 @@ function registerUser(req, res, tempUserInfo) {
           const verifyUrl = config.apiEntrance + 'users/verify?verify_token=' + verifyToken;
 
           // TODO enable sending email function when push to GitHub
-          Mailer.sendEmail(user.email, verifyUrl,
-            (err, info) => {
-              if (err) {
-                console.error(err);
-                return res.status(500)
-                  .json(utils.generateErrMsg(req, err));
-              }
-              // send the verify url to the client
-              res.status(200).json({
-                success: true,
-                url: verifyUrl
-              });
-            });
+          // Mailer.sendEmail(user.email, verifyUrl,
+          //   (err, info) => {
+          //     if (err) {
+          //       console.error(err);
+          //       return res.status(500)
+          //         .json(utils.generateErrMsg(req, err));
+          //     }
+          //     // send the verify url to the client
+          //     res.status(200).json({
+          //       success: true,
+          //       url: verifyUrl
+          //     });
+          //   });
           // send the verify url to the client
-          // res.status(200).json({
-          //   success: true,
-          //   url: verifyUrl
-          // });
+          res.status(200).json({
+            success: true,
+            url: verifyUrl
+          });
         });
       });
     });
+}
+
+function setPassword(user, password) {
+  return new Promise((resolve, reject) => {
+    console.log(typeof password);
+    user.setPassword(password, (setPasswordErr, user) => {
+      if (setPasswordErr) {
+        return reject(setPasswordErr);
+      }
+      resolve(user);
+    });
+  });
+}
+
+function authenticatePassword(user, password) {
+  return new Promise((resolve, reject) => {
+    console.log(typeof password);
+    user.authenticate(password, (err, thisModel, passwordErr) => {
+      if (err) {
+        return reject(err);
+      }
+      if (passwordErr) {
+        return reject(passwordErr);
+      }
+      resolve(thisModel);
+    });
+  });
+}
+
+function googleAuthenticate(idToken) {
+  return new Promise((resolve, reject) => {
+    const googleTokenInfoUrl = 'https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=';
+    request.get(googleTokenInfoUrl + idToken, (err, response, body) => {
+      if (err)
+        return reject(err);
+      console.log('Response from Google: ' + body);
+      body = JSON.parse(body);
+      resolve(body);
+    });
+  });
 }
 
 module.exports = userRouter;

@@ -5,6 +5,7 @@ const logger = require('morgan');
 const bodyParser = require('body-parser');
 const passport = require('passport');
 const authenticate = require('./authenticate');
+require('console-stamp')(console);
 
 const app = express();
 const hostname = '0.0.0.0';
@@ -16,7 +17,7 @@ server.listen(port, hostname, () => {
   crawler.start();
 });
 
-app.use(logger('dev'));
+app.use(logger('combined'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));
 

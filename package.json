@@ -12,6 +12,7 @@
   "dependencies": {
     "@google/maps": "^0.3.1",
     "body-parser": "^1.15.2",
+    "console-stamp": "^0.2.5",
     "crawler": "^1.0.1",
     "express": "^4.14.0",
     "google-auth-library": "^0.10.0",

@@ -27,6 +27,10 @@ const userSchema = new Schema({
     imageUrl: String,
     displayName: String,
     email: String
+  },
+  hasLocalProfile: {
+    type: Boolean,
+    default: false
   }
 }, {timeStamps: true});
 

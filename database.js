@@ -10,6 +10,7 @@ const db = mongoose.connection;
 db.on('error', console.error.bind(console, 'Connection Error: '));
 
 exports.connect = (callback) => {
+  mongoose.Promise = global.Promise;
   mongoose.connect(mongoDbUrl);
   db.once('open', () => {
     console.log('Connected to MongoDB');

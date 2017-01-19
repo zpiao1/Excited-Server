@@ -39,11 +39,18 @@ googleMapsCrawler.on('error', () => {
 });
 
 // functions used
-function crawl() {
-  console.log('Start crawling');
-  urlCrawler.queue(paths.map((path) => {
-    return baseUrl + path;
-  }));
+function crawl(shouldCrawl) {
+  if (shouldCrawl) {
+    return () => {
+      console.log('Start crawling');
+      urlCrawler.queue(paths.map((path) => {
+        return baseUrl + path;
+      }));
+    }
+  } else {
+    return () => {
+    };
+  }
 }
 
 function onUrlCrawled(err, res, done) {
@@ -201,11 +208,8 @@ function getLatLngFromApi(location, callback) {
   });
 }
 
-function noCrawl() {
-}
-
 exports.start = () => {
   // TODO when push to GitHub set arg to crawl
-  database.connect(crawl);
+  database.connect(crawl(false));
 };
 
