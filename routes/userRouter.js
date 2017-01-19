@@ -443,24 +443,24 @@ function registerUser(req, res, tempUserInfo) {
           const verifyUrl = config.apiEntrance + 'users/verify?verify_token=' + verifyToken;
 
           // TODO enable sending email function when push to GitHub
-          // Mailer.sendEmail(user.email, verifyUrl,
-          //   (err, info) => {
-          //     if (err) {
-          //       console.error(err);
-          //       return res.status(500)
-          //         .json(utils.generateErrMsg(req, err));
-          //     }
-          //     // send the verify url to the client
-          //     res.status(200).json({
-          //       success: true,
-          //       url: verifyUrl
-          //     });
-          //   });
+          Mailer.sendEmail(user.email, verifyUrl,
+            (err, info) => {
+              if (err) {
+                console.error(err);
+                return res.status(500)
+                  .json(utils.generateErrMsg(req, err));
+              }
+              // send the verify url to the client
+              res.status(200).json({
+                success: true,
+                url: verifyUrl
+              });
+            });
           // send the verify url to the client
-          res.status(200).json({
-            success: true,
-            url: verifyUrl
-          });
+          // res.status(200).json({
+          //   success: true,
+          //   url: verifyUrl
+          // });
         });
       });
     });
