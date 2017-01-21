@@ -8,6 +8,9 @@ const database = require('../database');
 const request = require('request');
 const Mailer = require('../nodemailer');
 const userErrs = require('passport-local-mongoose').errors;
+const imageUpload = require('../fileupload');
+const fs = require('fs');
+const path = require('path');
 
 userRouter.post('/register', (req, res) => {
   Users.findOne({email: req.body.email})
@@ -387,6 +390,44 @@ userRouter.route('/:id/likes')
       events: ['will', 'send', 'user', req.params.id, 'liked', 'events']
     });
   });
+
+userRouter.post('/:id/upload',
+  utils.verify,
+  imageUpload.single('image'),
+  (req, res, next) => {
+    Users.findById(req.params.id)
+      .exec()
+      .then(user => {
+        user.localProfile = user.localProfile || {};
+        user.localProfile.imageUrl = config.apiEntrance + `users/${req.params.id}/image`;
+        console.log(user.localProfile.imageUrl);
+        return user.save();
+      })
+      .then(user => {
+        res.status(200).json(user);
+      })
+      .catch(err => {
+        next(err);
+      });
+  });
+
+userRouter.get('/:id/image', utils.verify, (req, res, next) => {
+  const imageExts = ['.png', '.jpg', '.gif', '.tiff', '.jpeg', '.tif'];
+  console.log(__dirname);
+  for (ext of imageExts) {
+    const filePath = path.resolve(__dirname + `/../userImages/${(req.params.id + ext).toLowerCase()}`);
+    try {
+      fs.accessSync(filePath, fs.constants.R_OK);
+    } catch (err) {
+      console.log(filePath + ' not found');
+      continue;
+    }
+    return res.sendFile(filePath);
+  }
+  const err = new Error('File not found!');
+  err.status = 404;
+  next(err);
+});
 
 function loginUser(req, res, user) {
   req.logIn(user, (err) => {

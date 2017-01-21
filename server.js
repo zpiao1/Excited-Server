@@ -5,6 +5,7 @@ const logger = require('morgan');
 const bodyParser = require('body-parser');
 const passport = require('passport');
 const authenticate = require('./authenticate');
+const utils = require('./utils');
 require('console-stamp')(console);
 
 const app = express();
@@ -27,3 +28,9 @@ const eventRouter = require('./routes/eventRouter');
 const userRouter = require('./routes/userRouter');
 app.use('/api/events', eventRouter);
 app.use('/api/users', userRouter);
+
+app.use((err, req, res, next) => {
+  console.error('error');
+  console.error(err);
+  res.status(err.status || 500).send(utils.generateErrMsg(req, err));
+});

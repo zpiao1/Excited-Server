@@ -41,6 +41,13 @@ exports.verify = (req, res, next) => {
       } else {
         // save the decoded to the request
         req.decoded = decoded;
+        console.log(req.decoded._doc._id);
+        console.log(req.params.id);
+        if (req.decoded._doc._id !== req.params.id) {
+          const err = new Error('You are not permitted!');
+          err.status = 403;
+          return next(err);
+        }
         next();
       }
     });
