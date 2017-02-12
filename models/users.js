@@ -31,7 +31,9 @@ const userSchema = new Schema({
   hasLocalProfile: {
     type: Boolean,
     default: false
-  }
+  },
+  interested: [Schema.Types.ObjectId],
+  uninterested: [Schema.Types.ObjectId]
 }, {timeStamps: true});
 
 userSchema.plugin(passportLocalMongoose, {

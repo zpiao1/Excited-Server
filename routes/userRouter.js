@@ -11,9 +11,11 @@ const userErrs = require('passport-local-mongoose').errors;
 const imageUpload = require('../fileupload');
 const fs = require('fs');
 const path = require('path');
+const errors = require('../errors');
+const Rx = require('@reactivex/rxjs');
 
 userRouter.post('/register', (req, res) => {
-  Users.findOne({email: req.body.email})
+  Users.findOne({ email: req.body.email })
     .exec((err, user) => {
       if (err) {
         console.error(err);
@@ -28,7 +30,7 @@ userRouter.post('/register', (req, res) => {
         if (user.googleProfile) {
           tempUserInfo.googleProfile = JSON.parse(JSON.stringify(user.googleProfile));
         }
-        Users.remove({email: req.body.email})
+        Users.remove({ email: req.body.email })
           .exec((err, info) => {
             if (err) {
               console.error(err);
@@ -123,7 +125,7 @@ userRouter.get('/verify', (req, res) => {
     return res.status(404).end('<h1>No verification token</h1>');
   }
   const user = utils.decryptVerifyToken(verifyToken);
-  Users.findOne({_id: user._id, email: user.email})
+  Users.findOne({ _id: user._id, email: user.email })
     .exec((err, user) => {
       if (err) {
         return res.status(500).end('<h1>Internal Error</h1>');
@@ -384,11 +386,67 @@ userRouter.route('/:id/google')
       });
   });
 
-userRouter.route('/:id/likes')
+userRouter.route('/:id/interested')
   .get(utils.verify, (req, res, next) => {
-    res.json({
-      events: ['will', 'send', 'user', req.params.id, 'liked', 'events']
-    });
+    Users.findById(req.params.id)
+      .exec()
+      .then(user => {
+        if (!user) {
+          return res.status(404).json(util.generateErrMsg(req, new errors.UserNotFoundError()));
+        } else {
+          return res.status(200).json(user.interested ? user.interested : []);
+        }
+      })
+      .catch(err => {
+        res.status(500).json(utils.generateErrMsg(req, err));
+      });
+  })
+  .post(utils.verify, (req, res, next) => {
+    Rx.Observable.fromPromise(Users.findById(req.params.id).exec())
+      .flatMap(user => {
+        if (user) {
+          user.interested.remove(req.body.eventId);
+          return Rx.Observable.fromPromise(user.save());
+        } else {
+          return Rx.Observable.throw(new errors.UserNotFoundError())
+        }
+      })
+      .subscribe({
+        next: user => res.status(200).json(user),
+        error: err => res.status(err.status ? err.status : 500).json(utils.generateErrMsg(req, err))
+      });
+  });
+
+userRouter.route('/:id/uninterested')
+  .get(utils.verify, (req, res, next) => {
+    Rx.Observable.fromPromise(Users.findById(req.params.id).exec())
+      .subscribe({
+        next: user => {
+          if (!user) {
+            return res.status(404).json(utils.generateErrMsg(req, new errors.UserNotFoundError()));
+          } else {
+            return res.status(200).json(user.uninterested ? user.uninterested : []);
+          }
+        },
+        error: err => {
+          res.status(500).json(utils.generateErrMsg(req, err));
+        }
+      });
+  })
+  .post(utils.verify, (req, res, next) => {
+    Rx.Observable.fromPromise(Users.findById(req.params.id).exec())
+      .flatMap(user => {
+        if (user) {
+          user.uninterested.remove(req.body.eventId);
+          return Rx.Observable.fromPromise(user.save());
+        } else {
+          return Rx.Observable.throw(new errors.UserNotFoundError())
+        }
+      })
+      .subscribe({
+        next: user => res.status(200).json(user),
+        error: err => res.status(err.status ? err.status : 500).json(utils.generateErrMsg(req, err))
+      });
   });
 
 userRouter.post('/:id/upload',
@@ -445,7 +503,7 @@ function loginUser(req, res, user) {
 }
 
 function registerUser(req, res, tempUserInfo) {
-  Users.register(new Users({email: req.body.email}),  // register the user
+  Users.register(new Users({ email: req.body.email }),  // register the user
     req.body.password, (err, user) => {
       if (err) {
         console.error(err);

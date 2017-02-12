@@ -4,13 +4,14 @@
   "description": "Server for the Excited app",
   "main": "index.js",
   "scripts": {
-    "test": "npm install && forever start ./server.js -f",
-    "start": "npm install && forever start -o ./outfile.log -e ./errfile.log -l ~/excited-server/forever.log --append ./server.js"
+    "test": "npm install && forever start -c \"node --harmony\" ./server.js -f",
+    "start": "npm install && forever start -o ./outfile.log -e ./errfile.log -l ~/excited-server/forever.log --append -c \"node --harmony\" ./server.js"
   },
   "author": "Zhao Jingyi",
   "license": "ISC",
   "dependencies": {
     "@google/maps": "^0.3.1",
+    "@reactivex/rxjs": "^5.1.0",
     "body-parser": "^1.15.2",
     "console-stamp": "^0.2.5",
     "crawler": "^1.0.1",

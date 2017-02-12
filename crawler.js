@@ -210,6 +210,6 @@ function getLatLngFromApi(location, callback) {
 
 exports.start = () => {
   // TODO when push to GitHub set arg to crawl
-  database.connect(crawl(true));
+  database.connect(crawl(false));
 };
 

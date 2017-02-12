@@ -31,6 +31,14 @@ class NoPermissionError extends NetworkError {
   }
 }
 
+class UserNotFoundError extends NetworkError {
+  constructor(message) {
+    super(message ? message : 'User not found!',
+      'UserNotFoundError',
+      404);
+  }
+}
 exports.AuthenticationError = AuthenticationError;
 exports.NoPermissionError = NoPermissionError;
 exports.TokenMissingError = TokenMissingError;
+exports.UserNotFoundError = UserNotFoundError;

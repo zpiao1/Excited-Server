@@ -25,8 +25,6 @@ exports.sendEmail = (to, url, callback) => {
     html: `<h1>Thank you for registering with Excited!</h1><p>You are one step from completing your registration!</p><p>Click the link below to authenticate your email account:<a href="${url}">${url}</a></p><p>Please ignore the email if did not register an account with <em>Excited!</em></p><p>Thank you very much!</p><p>Regards,</p><p>Zhao Jingyi</p>`
   };
 
-  transporter.sendMail(mailOptions, (err, info) => {
-    callback(err, info);
-  });
+  transporter.sendMail(mailOptions, callback);
 };
 

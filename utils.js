@@ -1,6 +1,12 @@
 const jwt = require('jsonwebtoken');
 const config = require('./config.json');
 const crypto = require('crypto');
+const Rx = require('@reactivex/rxjs');
+const errors = require('./errors');
+const AuthenticationError = errors.AuthenticationError;
+const NoPermissionError = errors.NoPermissionError;
+const TokenMissingError = errors.TokenMissingError;
+
 const cipher = crypto.createCipher('aes192', config.secretKey);
 const decipher = crypto.createDecipher('aes192', config.secretKey);
 
@@ -25,7 +31,7 @@ exports.loginResponse = (user, token) => {
 
 exports.getToken = (user) => {
   // expires one year later
-  return jwt.sign(user, config.secretKey, {expiresIn: 3600 * 24 * 365});
+  return jwt.sign(user, config.secretKey, { expiresIn: 3600 * 24 * 365 });
 };
 
 exports.verify = (req, res, next) => {
@@ -33,28 +39,26 @@ exports.verify = (req, res, next) => {
 
   // decode token
   if (token) {
-    jwt.verify(token, config.secretKey, (err, decoded) => {
-      if (err) {
-        const err = new Error('You are not authenticated!');
-        err.status = 401;
-        return next(err);
-      } else {
-        // save the decoded to the request
+    const verifyObservable = Rx.Observable.bindNodeCallback(jwt.verify);
+    verifyObservable(token, config.secretKey)
+      .catch(error => {
+        return Rx.Observable.throw(new AuthenticationError());
+      })
+      .do(decoded => {
         req.decoded = decoded;
         console.log(req.decoded._doc._id);
         console.log(req.params.id);
+      })
+      .flatMap(() => {
         if (req.decoded._doc._id !== req.params.id) {
-          const err = new Error('You are not permitted!');
-          err.status = 403;
-          return next(err);
+          return Rx.Observable.throw(new NoPermissionError());
+        } else {
+          return Rx.Observable.empty();
         }
-        next();
-      }
-    });
+      })
+      .subscribe(() => { }, next, next);
   } else {
-    const err = new Error('No token provided!');
-    err.status = 403;
-    return next(err);
+    return next(new TokenMissingError());
   }
 };
 
@@ -67,9 +71,9 @@ exports.generateVerifyToken = (user) => {
 exports.decryptVerifyToken = (verifyToken) => {
   let decrypted = decipher.update(verifyToken, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
-  const splited = decrypted.split(':');
+  const split = decrypted.split(':');
   return {
-    _id: splited[0],
-    email: splited[1]
+    _id: split[0],
+    email: split[1]
   };
 };
